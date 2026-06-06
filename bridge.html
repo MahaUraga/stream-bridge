@@ -4,35 +4,32 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
 <meta name="robots" content="noindex,nofollow">
-<title>Loading…</title>
+<title>Loading</title>
 <style>
-  html,body{margin:0;padding:0;width:100%;height:100%;background:#000;color:#888;font-family:-apple-system,BlinkMacSystemFont,sans-serif;overflow:hidden}
-  .center{display:flex;align-items:center;justify-content:center;height:100vh;flex-direction:column;gap:14px}
-  .spinner{width:38px;height:38px;border:3px solid #333;border-top-color:#667eea;border-radius:50%;animation:s 1s linear infinite}
-  @keyframes s{to{transform:rotate(360deg)}}
-  .err{color:#f55;text-align:center;padding:20px;max-width:80%;font-size:14px}
-  /* Hidden iframe so Dart's _checkMatchHasIframe passes.
-     src="about:blank" is filtered out, so Dart falls back to loading
-     this page in the WebView and lets the JS below run. */
-  #_dh{display:none}
+html,body{margin:0;padding:0;width:100%;height:100%;background:#000;color:#888;font-family:-apple-system,BlinkMacSystemFont,sans-serif;overflow:hidden}
+.center{display:flex;align-items:center;justify-content:center;height:100vh;flex-direction:column;gap:14px}
+.spinner{width:38px;height:38px;border:3px solid #333;border-top-color:#667eea;border-radius:50%;animation:s 1s linear infinite}
+@keyframes s{to{transform:rotate(360deg)}}
+.err{color:#f55;text-align:center;padding:20px;max-width:80%;font-size:14px}
+#_dh{display:none}
 </style>
 </head>
 <body>
 <iframe id="_dh" src="about:blank"></iframe>
 <div class="center" id="status">
   <div class="spinner"></div>
-  <div>Loading stream…</div>
+  <div>Loading stream</div>
 </div>
 <script>
 (function(){
   'use strict';
 
   var FRAMES = [
-    'https://vsys.kora-top.zip/frame.php',
-    'https://ar.kora-top.zip/frame.php',
-    'https://yalla.kora-top.zip/frame.php',
-    'https://live.kora-top.zip/frame.php',
-    'https://vip.kora-top.zip/frame.php'
+    'https://vsys.kora-top.mov/frame.php',
+    'https://ar.kora-top.mov/frame.php',
+    'https://yalla.kora-top.mov/frame.php',
+    'https://live.kora-top.mov/frame.php',
+    'https://vip.kora-top.mov/frame.php'
   ];
   var P_VALUE = 12;
 
@@ -71,9 +68,6 @@
     var lang = p.get('lang') || 'ar';
     if (!m) { err('Missing match id'); return; }
 
-    // Call kora-api, get channels, redirect DIRECTLY to kora-top.zip.
-    // This makes kora-top.zip the TOP FRAME so injected scripts can
-    // block popups, auto-click play, and control the UI.
     fetchAPI('https://kora-api.space/', m, lang)
       .catch(function(){ return fetchAPI('https://ws.kora-api.top/', m, lang); })
       .then(function(data){
@@ -94,12 +88,10 @@
         location.replace(url);
       })
       .catch(function(e){
-        // Fallback: go to 000007.mov if API fails
-        var fallback = 'https://000007.mov/?m=' + encodeURIComponent(m) + '&lang=' + encodeURIComponent(lang);
-        location.replace(fallback);
+        err('Stream temporarily unavailable');
       });
-  } catch(e){
-    err(String(e && e.message || e));
+  } catch(e) {
+    err('Stream temporarily unavailable');
   }
 })();
 </script>
