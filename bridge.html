@@ -24,6 +24,14 @@ html,body{margin:0;padding:0;width:100%;height:100%;background:#000;color:#888;f
 (function(){
   'use strict';
 
+  // Stream-bridge v2 (2026-06-07):
+  //   v1 always built ?ch=channels[0].ch — but for matches whose channels are
+  //   ALL LIVE-only (ch=""), this produced ?ch=&... on kora-top.mov which
+  //   triggers a popunder ad chain instead of playing a stream.
+  //   v2 selects the first channel WITH a real `ch` for the kora-top frame URL,
+  //   and if no kora-top channel exists at all, redirects directly to the first
+  //   LIVE server's mobile_link / link (skipping the kora-top wrapper entirely).
+
   var FRAMES = [
     'https://vsys.kora-top.mov/frame.php',
     'https://ar.kora-top.mov/frame.php',
@@ -34,17 +42,17 @@ html,body{margin:0;padding:0;width:100%;height:100%;background:#000;color:#888;f
   var P_VALUE = 12;
 
   function err(msg){
-    var s=document.getElementById('status');
-    if(s) s.innerHTML='<div class="err">'+msg+'</div>';
+    var s = document.getElementById('status');
+    if (s) s.innerHTML = '<div class="err">' + msg + '</div>';
   }
 
   function getVisitorId(){
     var id = localStorage.getItem('v1');
-    if(!id){
+    if (!id) {
       var d = Date.now();
       id = 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c){
         var r = (d + Math.random()*16) % 16 | 0;
-        return (c==='x' ? r : (r&3|8)).toString(16);
+        return (c === 'x' ? r : (r & 3 | 8)).toString(16);
       });
       localStorage.setItem('v1', id);
     }
@@ -57,9 +65,36 @@ html,body{margin:0;padding:0;width:100%;height:100%;background:#000;color:#888;f
             String(ts.getDate()).padStart(2,'0') + String(ts.getHours()).padStart(2,'0') +
             String(ts.getMinutes()).padStart(2,'0');
     return fetch(base + 'api/matche/' + matchId + '/' + lang + '?t=' + t).then(function(r){
-      if(!r.ok) throw new Error('HTTP '+r.status);
+      if (!r.ok) throw new Error('HTTP ' + r.status);
       return r.json();
     });
+  }
+
+  function buildChannelData(channels){
+    return channels.map(function(c){
+      return {
+        n:  c.server_name || c.server_name_en || '',
+        ch: c.ch || c.key || '',
+        e:  c.edge,
+        l:  c.link,
+        ml: c.mobile_link,
+        t:  c.type
+      };
+    });
+  }
+
+  function pickKoraTopChannel(channels){
+    // Pick the first channel that has a real `ch` key (kora-top playable).
+    for (var i = 0; i < channels.length; i++) {
+      var k = channels[i].ch || channels[i].key;
+      if (k && k.length > 0) return { idx: i, key: k };
+    }
+    return null;
+  }
+
+  function pickLiveDestination(channel){
+    // Prefer mobile_link (cleaner direct player), fallback to link.
+    return channel.mobile_link || channel.link || '';
   }
 
   try {
@@ -71,26 +106,42 @@ html,body{margin:0;padding:0;width:100%;height:100%;background:#000;color:#888;f
     fetchAPI('https://kora-api.space/', m, lang)
       .catch(function(){ return fetchAPI('https://ws.kora-api.top/', m, lang); })
       .then(function(data){
-        if(!data || !data.channels || !data.channels.length){
+        if (!data || !data.channels || !data.channels.length) {
           err('No streams available yet. Try again when the match starts.');
           return;
         }
         var channels = data.channels;
-        var ch0 = channels[0];
-        var chKey = ch0.ch || ch0.key || '';
-        var kt = Math.floor(Date.now() / 1000);
-        var frame = FRAMES[Math.floor(Math.random() * FRAMES.length)];
-        var url = frame + '?ch=' + chKey + '&p=' + P_VALUE + '&token=' + getVisitorId() + '&kt=' + kt;
-        var chData = channels.map(function(c){
-          return {n:c.server_name||c.server_name_en, ch:c.ch||c.key||'', e:c.edge, l:c.link, ml:c.mobile_link, t:c.type};
-        });
-        url += '#' + btoa(unescape(encodeURIComponent(JSON.stringify(chData))));
-        location.replace(url);
+        var chData = buildChannelData(channels);
+        var koraPick = pickKoraTopChannel(channels);
+
+        if (koraPick) {
+          // Mixed match: route through kora-top.mov so adBlockScript Phase 3
+          // builds the server bar and the user can swap between channels.
+          var kt = Math.floor(Date.now() / 1000);
+          var frame = FRAMES[Math.floor(Math.random() * FRAMES.length)];
+          var url = frame + '?ch=' + encodeURIComponent(koraPick.key) +
+                    '&p=' + P_VALUE +
+                    '&token=' + getVisitorId() +
+                    '&kt=' + kt;
+          url += '#' + btoa(unescape(encodeURIComponent(JSON.stringify(chData))));
+          location.replace(url);
+          return;
+        }
+
+        // LIVE-only match (UFC, F1, niche events): no kora-top channel exists.
+        // Skip kora-top entirely and go straight to the first server's player page.
+        var firstLive = channels[0];
+        var dest = pickLiveDestination(firstLive);
+        if (dest) {
+          location.replace(dest);
+        } else {
+          err('No playable streams for this match yet.');
+        }
       })
       .catch(function(e){
         err('Stream temporarily unavailable');
       });
-  } catch(e) {
+  } catch (e) {
     err('Stream temporarily unavailable');
   }
 })();
